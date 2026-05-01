@@ -1,0 +1,40 @@
+---
+# Root App-of-Apps. Apply once after ArgoCD is up:
+#   kubectl apply -f platform/gitops/root-app.yaml
+#
+# This Application watches platform/gitops/applications/ and reconciles every
+# Application manifest found there. Adding a new component = drop a new
+# Application YAML in that directory, commit, push.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/openthisworld/all-in-one-homelab.git
+    targetRevision: main
+    path: platform/gitops/applications
+    directory:
+      recurse: true
+      include: "*.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

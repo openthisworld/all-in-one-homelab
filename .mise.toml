@@ -1,0 +1,27 @@
+# Toolchain for HomeLab repo root.
+# Per-project tools belong in projects/<name>/.mise.toml and override these.
+# Versions are exact-pinned. Bump deliberately, in their own commit.
+
+[tools]
+opentofu     = "1.10.3"
+kubectl      = "1.32.3"
+helm         = "3.17.2"
+kind         = "0.27.0"
+k9s          = "0.40.5"
+kustomize    = "5.6.0"
+yq           = "4.45.1"
+jq           = "1.7.1"
+just         = "1.40.0"
+pre-commit   = "4.2.0"
+python       = "3.13.2"
+node         = "22.14.0"
+# Note: gh is intentionally NOT pinned here — it's a system tool, managed via brew.
+
+[env]
+# Useful defaults; override per project as needed.
+KUBECONFIG = "{{ env.HOME }}/.kube/config"
+KIND_CLUSTER_NAME = "homelab"
+
+[settings]
+# Fail loudly when a tool requested by a config file isn't installed.
+experimental = true

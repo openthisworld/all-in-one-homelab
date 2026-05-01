@@ -1,0 +1,46 @@
+---
+# kind cluster config for HomeLab.
+# 1 control + 2 workers, no default CNI (Cilium installed separately).
+# Apply with: kind create cluster --config platform/bootstrap/kind-cluster.yaml --name homelab
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: homelab
+
+networking:
+  # Cilium replaces kindnet entirely; install via Helm right after cluster create.
+  disableDefaultCNI: true
+  # kube-proxy is replaced by Cilium's eBPF implementation.
+  kubeProxyMode: none
+  # Default pod/service CIDRs; left explicit for documentation.
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/16"
+  # IPv4 only — IPv6 adds noise we don't need on a lab.
+  ipFamily: ipv4
+
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.32.3
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # Keep ingress reachable on the host without per-service port-forwards.
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+  - role: worker
+    image: kindest/node:v1.32.3
+  - role: worker
+    image: kindest/node:v1.32.3
+
+# Container runtime tweaks: bump open-file limits a bit for Cilium + observability.
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+      endpoint = ["https://registry-1.docker.io"]

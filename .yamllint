@@ -1,0 +1,19 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 140
+    level: warning
+  comments:
+    min-spaces-from-content: 1
+  truthy:
+    check-keys: false  # Helm/k8s use 'on:' as a key
+  document-start:
+    present: true
+
+ignore: |
+  .terraform/
+  charts/*/charts/
+  node_modules/
+  .venv/

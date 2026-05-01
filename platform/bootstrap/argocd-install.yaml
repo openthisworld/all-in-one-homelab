@@ -1,0 +1,26 @@
+---
+# ArgoCD bootstrap reference.
+#
+# We do NOT vendor the full ArgoCD install YAML here — that's ~thousands of
+# lines and goes stale. Instead, the bootstrap script applies the upstream
+# stable manifest pinned to a known-good version, then we layer minimal
+# customizations as separate manifests in this directory once we need them.
+#
+# Pinned version (keep in sync with scripts/bootstrap.sh):
+#   ARGOCD_VERSION="v2.13.3"
+#   kubectl apply -n argocd \
+#     -f https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml
+#
+# This file is intentionally minimal: it only ensures the namespace exists.
+# Everything else (custom RBAC, repo credentials, ingress) is added by ArgoCD
+# Applications under platform/gitops/applications/ once the root App is reconciling.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    app.kubernetes.io/name: argocd
+    app.kubernetes.io/part-of: argocd
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
