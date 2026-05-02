@@ -1,0 +1,21 @@
+---
+# Vault UI — secret management dashboard.
+# Access: http://vault.homelab.local
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vault-ui
+  namespace: vault
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: vault.homelab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vault-ui
+                port:
+                  number: 8200

@@ -1,0 +1,42 @@
+---
+# HashiCorp Vault — central secret store.
+# See docs/adr/0006-secrets-management-vault.md for rationale.
+#
+# MANUAL SYNC ONLY — Vault restarts break the unseal state.
+# After a sync that causes a pod restart, run: just vault-unseal
+#
+# First-time setup after install:
+#   just vault-init    → generates unseal keys + root token (SAVE THEM)
+#   just vault-unseal  → unseals the pod
+#   just vault-setup   → enables KV v2 + kubernetes auth + ESO policy
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://helm.releases.hashicorp.com
+      chart: vault
+      targetRevision: 0.29.1
+      helm:
+        releaseName: vault
+        valueFiles:
+          - $values/platform/platform-services/vault/values.yaml
+    - repoURL: https://github.com/openthisworld/all-in-one-homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    # NO automated sync — Vault restart requires manual unseal. See ADR-006.
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true

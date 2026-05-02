@@ -1,0 +1,56 @@
+---
+# Vault values for kind homelab (Mac mini M4, 16 GB RAM).
+# Single-node server mode with Raft integrated storage.
+
+global:
+  enabled: true
+
+# Vault agent injector — disabled. We use External Secrets Operator instead.
+# Injector adds a sidecar to every pod — unnecessary overhead.
+injector:
+  enabled: false
+
+server:
+  # Single replica — HA not needed for a personal lab.
+  # HA with Raft requires 3+ replicas for quorum.
+  ha:
+    enabled: false
+
+  # Resource limits tuned for 16 GB host.
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 50m
+    limits:
+      memory: 512Mi
+
+  # Raft integrated storage — no external database needed.
+  dataStorage:
+    enabled: true
+    size: 1Gi
+    storageClass: standard  # kind local-path provisioner
+    accessMode: ReadWriteOnce
+
+  # Audit log storage — disabled by default to save disk.
+  # Enable with: vault audit enable file file_path=/vault/audit/audit.log
+  auditStorage:
+    enabled: false
+
+  # Readiness probe: 204 = sealed (not ready to serve) but init'd.
+  # This allows the pod to be "Running" while sealed.
+  readinessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
+
+  # Liveness probe: 501 = not initialized yet (still ok to stay alive).
+  livenessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204&uninitcode=501"
+    initialDelaySeconds: 60
+
+# Vault UI — accessible via ingress at http://vault.homelab.local
+ui:
+  enabled: true
+  serviceType: ClusterIP
+  servicePort: 8200
+  targetPort: 8200
