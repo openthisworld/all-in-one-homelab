@@ -12,7 +12,7 @@ config:
     # Kubernetes CRD storage — no external DB needed. Dex manages its own CRDs.
     type: kubernetes
     config:
-      inClusterConfig: true
+      inCluster: true
 
   web:
     http: 0.0.0.0:5556
