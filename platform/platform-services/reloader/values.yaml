@@ -1,0 +1,14 @@
+---
+# reloader — watches ConfigMaps and Secrets, restarts Pods that reference them.
+# Annotate a Deployment with:
+#   reloader.stakater.com/auto: "true"        # restart on any referenced CM/Secret change
+#   reloader.stakater.com/search: "true"      # restart only if annotation matches
+reloader:
+  reloader:
+    deployment:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 64Mi

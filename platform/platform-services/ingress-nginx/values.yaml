@@ -1,0 +1,59 @@
+---
+# ingress-nginx — tuned for kind (hostPort on control-plane node).
+#
+# How traffic flows in kind:
+#   browser → 127.0.0.1:80/443 → kind extraPortMappings → control-plane container
+#   → ingress-nginx DaemonSet Pod (hostPort) → backend Services
+#
+# The DaemonSet runs only on the node labelled ingress-ready=true,
+# which we set on the control-plane in kind-cluster.yaml.
+
+controller:
+  kind: DaemonSet
+
+  hostPort:
+    enabled: true
+    ports:
+      http: 80
+      https: 443
+
+  # Run only on the kind control-plane which has the port mappings.
+  nodeSelector:
+    kubernetes.io/os: linux
+    ingress-ready: "true"
+
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Equal"
+      effect: "NoSchedule"
+
+  # In kind, no external LB exists. NodePort avoids a pending LoadBalancer IP.
+  service:
+    type: NodePort
+
+  # Use IngressClass "nginx" — reference this in every Ingress manifest.
+  ingressClassResource:
+    name: nginx
+    enabled: true
+    default: true
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+  # Needed for ArgoCD grpc/websocket and Hubble UI streaming.
+  config:
+    proxy-body-size: "50m"
+    proxy-read-timeout: "3600"
+    proxy-send-timeout: "3600"
+
+  admissionWebhooks:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 64Mi

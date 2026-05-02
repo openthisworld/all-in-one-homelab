@@ -8,7 +8,7 @@
 # kube-proxy replacement is the headline reason to use Cilium here. Required
 # because we set kubeProxyMode: none in kind-cluster.yaml.
 kubeProxyReplacement: true
-k8sServiceHost: kind-control-plane
+k8sServiceHost: homelab-control-plane
 k8sServicePort: 6443
 
 # Image pull policy and tag pinning.

@@ -1,0 +1,14 @@
+---
+# metrics-server — required flags for kind (no valid kubelet TLS certs).
+args:
+  - --kubelet-insecure-tls
+  - --kubelet-preferred-address-types=InternalIP
+
+replicas: 1
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    memory: 64Mi
