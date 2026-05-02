@@ -65,8 +65,45 @@ breaking pod networking.
 kubectl patch configmap argocd-cm -n argocd --type merge -p '{"data":{"resource.exclusions":"- apiGroups:\n  - cilium.io\n  kinds:\n  - CiliumIdentity\n  clusters:\n  - \"*\"\n"}}'
 ```
 
+## Step 6 — Enable ArgoCD insecure mode (for HTTP Ingress)
+
+By default ArgoCD server redirects all HTTP traffic to HTTPS internally.
+This conflicts with nginx proxying plain HTTP. Switch it off:
+
+```bash
+kubectl patch configmap argocd-cmd-params-cm -n argocd \
+  --type merge \
+  -p '{"data":{"server.insecure":"true"}}'
+kubectl rollout restart deployment argocd-server -n argocd
+kubectl rollout status deployment argocd-server -n argocd --timeout=60s
+```
+
 **That's it.** ArgoCD will now reconcile everything in `platform/gitops/applications/`.
 Add a new component by dropping an `Application` manifest there, commit, and push.
+Ingress rules live in `platform/platform-services/ingresses/` — add a file there
+to expose a new service at `<name>.homelab.local`.
+
+## macOS host prerequisites (one-time, survives cluster rebuild)
+
+These are set up on the Mac itself, not in the cluster. Do them once.
+
+### DNS — dnsmasq wildcard
+
+Routes `*.homelab.local` to `127.0.0.1` so any subdomain hits the local cluster.
+
+```bash
+brew install dnsmasq
+echo "address=/.homelab.local/127.0.0.1" >> /opt/homebrew/etc/dnsmasq.conf
+sudo brew services start dnsmasq   # needs root to bind port 53
+sudo bash -c 'mkdir -p /etc/resolver && echo "nameserver 127.0.0.1" > /etc/resolver/homelab.local'
+# Verify:
+ping -c 1 anything.homelab.local   # should resolve to 127.0.0.1
+```
+
+Why `sudo brew services start` and not `brew services start`:
+port 53 is a privileged port (< 1024). macOS blocks non-root processes from
+binding it. Running as root installs a LaunchDaemon in `/Library/LaunchDaemons/`
+instead of `~/Library/LaunchAgents/`.
 
 ## Teardown
 

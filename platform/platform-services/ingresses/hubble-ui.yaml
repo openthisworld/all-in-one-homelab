@@ -1,0 +1,27 @@
+---
+# Hubble UI — Cilium network flow visualizer.
+# Access: http://hubble.homelab.local
+#
+# The hubble-ui Service lives in kube-system (installed by Cilium helm chart).
+# Namespace is set here explicitly so this manifest can live alongside other
+# Ingress resources in a single ArgoCD Application.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hubble-ui
+  namespace: kube-system
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: hubble.homelab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hubble-ui
+                port:
+                  number: 80

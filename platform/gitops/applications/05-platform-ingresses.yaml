@@ -1,0 +1,32 @@
+---
+# Ingress rules for platform UIs accessible via *.homelab.local.
+# Add a new file to platform/platform-services/ingresses/ to expose a new service.
+# DNS: dnsmasq on the macOS host resolves *.homelab.local → 127.0.0.1.
+# Traffic: 127.0.0.1:80 → kind portMapping → ingress-nginx → backend Service.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-ingresses
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/openthisworld/all-in-one-homelab.git
+    targetRevision: main
+    path: platform/platform-services/ingresses
+  destination:
+    server: https://kubernetes.default.svc
+    # Default namespace — each manifest specifies its own namespace explicitly.
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
