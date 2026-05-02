@@ -37,10 +37,9 @@ What this does step by step:
 5. Creates `eso-policy` — read-only access to `secret/homelab/*`
 6. Creates `eso-role` bound to the ESO ServiceAccount
 
-After this, apply the ClusterSecretStore:
-```bash
-kubectl apply -f platform/platform-services/external-secrets/cluster-secret-store.yaml
-```
+After this, the `cluster-secret-store` ArgoCD Application (wave 2) will automatically
+retry connecting to Vault. Within ~30s it transitions from error → Healthy.
+Check with: `kubectl get clustersecretstore vault`
 
 ## After every cluster restart (Vault seals on pod restart)
 

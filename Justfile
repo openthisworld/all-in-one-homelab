@@ -69,14 +69,12 @@ vault-init:
     kubectl exec -n {{vault_ns}} {{vault_pod}} -- \
         vault operator init -key-shares=3 -key-threshold=2
 
-# Unseal Vault — run after every pod restart (prompts for 2 keys).
+# Unseal Vault — run after every pod restart. Prompts for keys inside the container.
 vault-unseal:
-    @echo "Enter unseal key 1:"; \
-    read -rs KEY1; \
-    kubectl exec -n {{vault_ns}} {{vault_pod}} -- vault operator unseal "$$KEY1"; \
-    echo "Enter unseal key 2:"; \
-    read -rs KEY2; \
-    kubectl exec -n {{vault_ns}} {{vault_pod}} -- vault operator unseal "$$KEY2"
+    @echo "=== Unseal key 1 of 2 ==="
+    kubectl exec -it -n {{vault_ns}} {{vault_pod}} -- vault operator unseal
+    @echo "=== Unseal key 2 of 2 ==="
+    kubectl exec -it -n {{vault_ns}} {{vault_pod}} -- vault operator unseal
 
 # Show Vault seal/init status.
 vault-status:
