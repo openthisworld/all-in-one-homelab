@@ -55,6 +55,16 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
 kubectl apply -f platform/gitops/root-app.yaml
 ```
 
+## Step 5 — Exclude Cilium auto-generated resources from ArgoCD
+
+Cilium automatically creates `CiliumIdentity` resources in every namespace that has pods.
+Without this exclusion ArgoCD marks every Application as OutOfSync and may prune them,
+breaking pod networking.
+
+```bash
+kubectl patch configmap argocd-cm -n argocd --type merge -p '{"data":{"resource.exclusions":"- apiGroups:\n  - cilium.io\n  kinds:\n  - CiliumIdentity\n  clusters:\n  - \"*\"\n"}}'
+```
+
 **That's it.** ArgoCD will now reconcile everything in `platform/gitops/applications/`.
 Add a new component by dropping an `Application` manifest there, commit, and push.
 
