@@ -1,0 +1,40 @@
+---
+# Dex — OIDC identity provider with GitHub OAuth upstream.
+# See docs/adr/0007-sso-dex-github-oauth.md
+#
+# Depends on:
+#   - ExternalSecret dex-secrets in namespace dex (synced by cluster-secret-store app)
+#   - Vault secrets: secret/homelab/platform/dex/github and .../dex/argocd
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dex
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.dexidp.io
+      chart: dex
+      targetRevision: 0.19.1
+      helm:
+        releaseName: dex
+        valueFiles:
+          - $values/platform/platform-services/dex/values.yaml
+    - repoURL: https://github.com/openthisworld/all-in-one-homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dex
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true

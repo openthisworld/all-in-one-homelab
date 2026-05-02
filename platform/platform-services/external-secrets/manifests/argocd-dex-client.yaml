@@ -1,0 +1,26 @@
+---
+# ExternalSecret: argocd-dex-client (namespace: argocd)
+# Syncs the Dex OIDC client secret for ArgoCD from Vault → k8s Secret.
+# ArgoCD references this via $argocd-dex-client:clientSecret in argocd-cm.
+#
+# Same Vault path as dex-secrets — shared client_secret:
+#   just vault-put platform/dex/argocd
+#     → fields: client_secret=<same value as in dex-secrets>
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: argocd-dex-client
+  namespace: argocd
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault
+    kind: ClusterSecretStore
+  target:
+    name: argocd-dex-client
+    creationPolicy: Owner
+  data:
+    - secretKey: clientSecret
+      remoteRef:
+        key: secret/homelab/platform/dex/argocd
+        property: client_secret

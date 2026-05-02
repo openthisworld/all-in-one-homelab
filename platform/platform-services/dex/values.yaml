@@ -1,0 +1,73 @@
+---
+# Dex OIDC provider — GitHub OAuth upstream, serves ArgoCD and Grafana.
+#
+# Secrets are injected via envFrom (ExternalSecret dex-secrets):
+#   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET → GitHub OAuth App
+#   ARGOCD_CLIENT_SECRET                   → ArgoCD static OIDC client
+
+config:
+  issuer: http://dex.homelab.local
+
+  storage:
+    # Kubernetes CRD storage — no external DB needed. Dex manages its own CRDs.
+    type: kubernetes
+    config:
+      inClusterConfig: true
+
+  web:
+    http: 0.0.0.0:5556
+
+  connectors:
+    - type: github
+      id: github
+      name: GitHub
+      config:
+        # Injected from dex-secrets ExternalSecret via env vars.
+        clientID: $GITHUB_CLIENT_ID
+        clientSecret: $GITHUB_CLIENT_SECRET
+        redirectURI: http://dex.homelab.local/callback
+        # Restrict to specific GitHub users. Add your GitHub username.
+        orgs: []
+        # Uncomment to restrict to a GitHub org instead:
+        # orgs:
+        #   - name: your-org
+
+  oauth2:
+    skipApprovalScreen: true
+    responseTypes:
+      - code
+
+  staticClients:
+    - id: argocd
+      name: ArgoCD
+      # Secret injected via env var — Dex substitutes $VAR in config.
+      secret: $ARGOCD_CLIENT_SECRET
+      redirectURIs:
+        - http://argocd.homelab.local/auth/callback
+    # Grafana client — uncomment when Grafana is deployed.
+    # - id: grafana
+    #   name: Grafana
+    #   secret: $GRAFANA_CLIENT_SECRET
+    #   redirectURIs:
+    #     - http://grafana.homelab.local/login/generic_oauth
+
+# Mount the dex-secrets k8s Secret as environment variables.
+# ExternalSecret (in external-secrets/manifests/) syncs this from Vault.
+envFrom:
+  - secretRef:
+      name: dex-secrets
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+# Dex needs to create/manage its own CRDs for storage.
+serviceAccount:
+  create: true
+
+# RBAC to allow Dex to manage its storage CRDs.
+rbac:
+  create: true

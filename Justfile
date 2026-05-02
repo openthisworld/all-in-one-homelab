@@ -59,6 +59,20 @@ argocd-pwd:
 argocd-root-apply:
     kubectl apply -f platform/gitops/root-app.yaml
 
+# Configure ArgoCD OIDC via Dex (run once after Dex is Healthy + secrets synced).
+# Prereq: ExternalSecret argocd-dex-client must be SecretSynced in namespace argocd.
+argocd-oidc-setup:
+    @echo "Patching argocd-cm with Dex OIDC config..."
+    kubectl patch configmap argocd-cm -n {{argocd_ns}} --type merge -p \
+        '{"data":{"url":"http://argocd.homelab.local","oidc.config":"name: Dex\nissuer: http://dex.homelab.local\nclientID: argocd\nclientSecret: $argocd-dex-client:clientSecret\nrequestedScopes:\n  - openid\n  - profile\n  - email\n  - groups\n"}}'
+    @echo "Patching argocd-rbac-cm — granting openthisworld admin role..."
+    kubectl patch configmap argocd-rbac-cm -n {{argocd_ns}} --type merge -p \
+        '{"data":{"policy.csv":"g, openthisworld, role:admin\n","policy.default":"role:readonly"}}'
+    @echo "Restarting argocd-server..."
+    kubectl rollout restart deployment argocd-server -n {{argocd_ns}}
+    kubectl rollout status deployment argocd-server -n {{argocd_ns}} --timeout=60s
+    @echo "Done. Open http://argocd.homelab.local and click 'Log in via Dex'."
+
 # --- Vault helpers ---
 
 vault_ns := "vault"

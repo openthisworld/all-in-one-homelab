@@ -1,0 +1,24 @@
+---
+# Dex OIDC provider — exposed for browser redirects during OAuth flow.
+# Access: http://dex.homelab.local
+#
+# Both the browser (GitHub callback redirect) and ArgoCD/Grafana (token exchange)
+# must reach this endpoint. Since everything is loopback, one hostname works for all.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dex
+  namespace: dex
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: dex.homelab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dex
+                port:
+                  number: 5556
