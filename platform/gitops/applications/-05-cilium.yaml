@@ -1,0 +1,60 @@
+---
+# Cilium CNI — managed by ArgoCD with MANUAL sync only.
+#
+# DO NOT enable automated sync. Cilium controls cluster networking.
+# An automated reconcile gone wrong can take down the entire cluster network,
+# including ArgoCD itself (deadlock: ArgoCD can't fix what broke its own transport).
+#
+# Operational procedure for updates:
+#   1. Edit cilium-values.yaml or bump targetRevision in this file.
+#   2. Commit and push — ArgoCD will show OutOfSync.
+#   3. Open ArgoCD UI → Cilium → review the diff carefully.
+#   4. Click Sync manually. Watch: kubectl get nodes && cilium status --wait
+#
+# See docs/adr/0008-cilium-managed-by-argocd.md for full rationale.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cilium
+  namespace: argocd
+  annotations:
+    # Negative wave: if ArgoCD reconciles everything from scratch, Cilium
+    # must come up before any workload that needs pod networking.
+    argocd.argoproj.io/sync-wave: "-5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://helm.cilium.io
+      chart: cilium
+      targetRevision: 1.16.5
+      helm:
+        releaseName: cilium
+        valueFiles:
+          - $values/platform/platform-services/cilium/values.yaml
+    - repoURL: https://github.com/openthisworld/all-in-one-homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  # NO automated sync — intentional. See ADR-008.
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+      - PrunePropagationPolicy=background
+  ignoreDifferences:
+    # Cilium auto-populates these fields — ignore them to avoid false OutOfSync.
+    - group: apps
+      kind: DaemonSet
+      jsonPointers:
+        - /spec/template/metadata/annotations
+    - group: ""
+      kind: ConfigMap
+      name: cilium-config
+      namespace: kube-system
+      jsonPointers:
+        - /data/write-cni-conf-when-ready

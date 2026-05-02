@@ -17,7 +17,10 @@ kind create cluster --config platform/bootstrap/kind-cluster.yaml --name homelab
 
 Nodes will be `NotReady` until Cilium is installed. Expected.
 
-## Step 2 — Install Cilium
+## Step 2 — Install Cilium (bootstrap only)
+
+Cilium must be installed manually here because ArgoCD needs a working CNI to run.
+After ArgoCD is up, it takes over Cilium management — see Step 7.
 
 ```bash
 helm repo add cilium https://helm.cilium.io
@@ -25,7 +28,7 @@ helm repo update
 helm install cilium cilium/cilium \
   --version 1.16.5 \
   --namespace kube-system \
-  --values platform/bootstrap/cilium-values.yaml \
+  --values platform/platform-services/cilium/values.yaml \
   --wait
 ```
 
@@ -78,7 +81,26 @@ kubectl rollout restart deployment argocd-server -n argocd
 kubectl rollout status deployment argocd-server -n argocd --timeout=60s
 ```
 
-**That's it.** ArgoCD will now reconcile everything in `platform/gitops/applications/`.
+## Step 7 — Hand Cilium over to ArgoCD
+
+ArgoCD now has a `cilium` Application (sync-wave -5, manual sync only — see ADR-008).
+Transfer management from the bootstrap helm install to ArgoCD:
+
+```bash
+# Brief network disruption (~30-60s) while Cilium is reinstalled by ArgoCD.
+helm uninstall cilium -n kube-system
+```
+
+Then in the ArgoCD UI: open the **cilium** Application → click **Sync**.
+Watch nodes recover:
+```bash
+kubectl wait --for=condition=Ready nodes --all --timeout=300s
+```
+
+After this, all future Cilium changes go through git + manual ArgoCD sync.
+Never run `helm upgrade cilium` directly again.
+
+**That's it.** ArgoCD now reconciles everything in `platform/gitops/applications/`.
 Add a new component by dropping an `Application` manifest there, commit, and push.
 Ingress rules live in `platform/platform-services/ingresses/` — add a file there
 to expose a new service at `<name>.homelab.local`.
