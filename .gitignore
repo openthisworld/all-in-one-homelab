@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+.vault-secrets.env
 *.pem
 *.key
 *.crt
