@@ -55,11 +55,9 @@ dex:
 
 server:
   ingress:
-    enabled: true
-    ingressClassName: nginx
-    hostname: argocd.homelab.local
-    annotations:
-      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    # Ingress is managed in platform/platform-services/ingresses/argocd.yaml
+    # (consistent with all other services). Do not enable here.
+    enabled: false
   resources:
     requests:
       cpu: 50m
