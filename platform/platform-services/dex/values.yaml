@@ -4,6 +4,7 @@
 # Secrets are injected via envFrom (ExternalSecret dex-secrets):
 #   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET → GitHub OAuth App
 #   ARGOCD_CLIENT_SECRET                   → ArgoCD static OIDC client
+#   VAULT_CLIENT_SECRET                    → Vault static OIDC client
 
 config:
   issuer: http://dex.homelab.local
@@ -44,6 +45,12 @@ config:
       secret: $ARGOCD_CLIENT_SECRET
       redirectURIs:
         - http://argocd.homelab.local/auth/callback
+    - id: vault
+      name: Vault
+      secret: $VAULT_CLIENT_SECRET
+      redirectURIs:
+        - http://vault.homelab.local/ui/vault/auth/oidc/oidc/callback
+        - http://localhost:8250/oidc/callback  # vault CLI login
     # Grafana client — uncomment when Grafana is deployed.
     # - id: grafana
     #   name: Grafana
