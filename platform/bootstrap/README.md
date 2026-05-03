@@ -12,15 +12,15 @@ After `root-app.yaml` is applied, ArgoCD reconciles the rest — no more `kubect
 ## Step 1 — Create the kind cluster
 
 ```bash
-kind create cluster --config platform/bootstrap/kind-cluster.yaml --name homelab
+just kind-up
 ```
 
 Nodes will be `NotReady` until Cilium is installed. Expected.
 
 ## Step 2 — Install Cilium (bootstrap only)
 
-Cilium must be installed manually here because ArgoCD needs a working CNI to run.
-After ArgoCD is up, it takes over Cilium management — see Step 7.
+Cilium must be installed manually because ArgoCD needs a working CNI to run.
+After ArgoCD is up, it takes over Cilium management — see Step 5.
 
 ```bash
 helm repo add cilium https://helm.cilium.io
@@ -30,64 +30,45 @@ helm install cilium cilium/cilium \
   --namespace kube-system \
   --values platform/platform-services/cilium/values.yaml \
   --wait
-```
-
-Wait for nodes:
-```bash
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
 
-## Step 3 — Install ArgoCD
+## Step 3 — Install ArgoCD via Helm
+
+Config-as-code: OIDC, RBAC, ingress, and server params are all in
+`platform/platform-services/argocd/values.yaml` — no manual `kubectl patch` needed.
 
 ```bash
-kubectl create namespace argocd
-kubectl apply -n argocd \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.3/manifests/install.yaml
-kubectl wait --for=condition=Available deployment --all -n argocd --timeout=300s
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update argo
+helm install argocd argo/argo-cd \
+  --namespace argocd \
+  --create-namespace \
+  --version 7.7.14 \
+  --values platform/platform-services/argocd/values.yaml \
+  --wait
 ```
 
-Get initial admin password:
+Get initial admin password (still works alongside SSO):
 ```bash
-kubectl -n argocd get secret argocd-initial-admin-secret \
-  -o jsonpath='{.data.password}' | base64 -d && echo
+just argocd-pwd
 ```
 
 ## Step 4 — Apply the root App-of-Apps
 
 ```bash
-kubectl apply -f platform/gitops/root-app.yaml
+just argocd-root-apply
 ```
 
-## Step 5 — Exclude Cilium auto-generated resources from ArgoCD
-
-Cilium automatically creates `CiliumIdentity` resources in every namespace that has pods.
-Without this exclusion ArgoCD marks every Application as OutOfSync and may prune them,
-breaking pod networking.
-
+ArgoCD now reconciles everything in `platform/gitops/applications/`.
+Watch the sync waves roll out:
 ```bash
-kubectl patch configmap argocd-cm -n argocd --type merge -p '{"data":{"resource.exclusions":"- apiGroups:\n  - cilium.io\n  kinds:\n  - CiliumIdentity\n  clusters:\n  - \"*\"\n"}}'
+kubectl get applications -n argocd --watch
 ```
 
-## Step 6 — Enable ArgoCD insecure mode (for HTTP Ingress)
-
-By default ArgoCD server redirects all HTTP traffic to HTTPS internally.
-This conflicts with nginx proxying plain HTTP. Switch it off:
+## Step 5 — Hand Cilium over to ArgoCD
 
 ```bash
-kubectl patch configmap argocd-cmd-params-cm -n argocd \
-  --type merge \
-  -p '{"data":{"server.insecure":"true"}}'
-kubectl rollout restart deployment argocd-server -n argocd
-kubectl rollout status deployment argocd-server -n argocd --timeout=60s
-```
-
-## Step 7 — Hand Cilium over to ArgoCD
-
-ArgoCD now has a `cilium` Application (sync-wave -5, manual sync only — see ADR-008).
-Transfer management from the bootstrap helm install to ArgoCD:
-
-```bash
-# Brief network disruption (~30-60s) while Cilium is reinstalled by ArgoCD.
 helm uninstall cilium -n kube-system
 ```
 
@@ -97,99 +78,100 @@ Watch nodes recover:
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
 
-After this, all future Cilium changes go through git + manual ArgoCD sync.
-Never run `helm upgrade cilium` directly again.
+After this, all Cilium changes go through git + manual ArgoCD sync.
 
-**That's it.** ArgoCD now reconciles everything in `platform/gitops/applications/`.
-Add a new component by dropping an `Application` manifest there, commit, and push.
-Ingress rules live in `platform/platform-services/ingresses/` — add a file there
-to expose a new service at `<name>.homelab.local`.
+## Step 6 — Patch CoreDNS for in-cluster *.homelab.local DNS
+
+**Required for OIDC to work.** Inside the cluster, `dex.homelab.local` resolves to
+`127.0.0.1` (the Mac's dnsmasq), which is unreachable from pods. This step adds a
+CoreDNS zone that maps `*.homelab.local` → ingress-nginx ClusterIP.
+
+Run after ingress-nginx Application is Healthy:
+```bash
+just coredns-patch
+```
+
+Verify:
+```bash
+kubectl run -it --rm dns-test --image=busybox --restart=Never -- \
+  nslookup dex.homelab.local
+# Should return ingress-nginx ClusterIP, not 127.0.0.1
+```
+
+## Step 7 — Initialize and configure Vault
+
+```bash
+just vault-init    # save the 3 unseal keys + root token somewhere secure
+just vault-unseal  # enter any 2 of the 3 keys
+just vault-status  # Initialized: true, Sealed: false → ready
+just vault-setup   # KV v2 + kubernetes auth + ESO role (prompts for root token)
+```
+
+See `platform/platform-services/vault/OPERATIONS.md` for the full runbook.
+
+## Step 8 — Seed secrets
+
+Fill in `.vault-secrets.env` (copy from `.vault-secrets.env.example`):
+- Vault root token (from Step 7)
+- GitHub OAuth App credentials (create at github.com/settings/developers)
+- Two random strings for OIDC client secrets (`openssl rand -hex 32` each)
+
+Then seed:
+```bash
+just vault-seed
+```
+
+ESO syncs secrets to the cluster within ~60 s. Verify:
+```bash
+kubectl get externalsecret -n dex
+kubectl get externalsecret -n argocd argocd-dex-client
+# Status: SecretSynced
+```
+
+## Step 9 — Configure Vault OIDC (after Dex is Healthy)
+
+```bash
+just vault-setup-oidc
+```
+
+After this: `http://vault.homelab.local` → select **OIDC** → **Sign in with Dex** → GitHub.
+
+---
+
+**That's it.** The full platform is up with SSO via GitHub → Dex → ArgoCD + Vault.
+
+To add a new service: drop an `Application` manifest in `platform/gitops/applications/`
+and an `Ingress` in `platform/platform-services/ingresses/`. Commit and push.
+
+## Upgrading ArgoCD
+
+When changing `platform/platform-services/argocd/values.yaml`:
+```bash
+just argocd-upgrade
+```
 
 ## macOS host prerequisites (one-time, survives cluster rebuild)
 
-These are set up on the Mac itself, not in the cluster. Do them once.
-
 ### DNS — dnsmasq wildcard
 
-Routes `*.homelab.local` to `127.0.0.1` so any subdomain hits the local cluster.
+Routes `*.homelab.local` to `127.0.0.1` so any subdomain hits the local cluster
+from the Mac browser.
 
 ```bash
 brew install dnsmasq
 echo "address=/.homelab.local/127.0.0.1" >> /opt/homebrew/etc/dnsmasq.conf
 sudo brew services start dnsmasq   # needs root to bind port 53
 sudo bash -c 'mkdir -p /etc/resolver && echo "nameserver 127.0.0.1" > /etc/resolver/homelab.local'
-# Verify:
 ping -c 1 anything.homelab.local   # should resolve to 127.0.0.1
 ```
 
-Why `sudo brew services start` and not `brew services start`:
-port 53 is a privileged port (< 1024). macOS blocks non-root processes from
-binding it. Running as root installs a LaunchDaemon in `/Library/LaunchDaemons/`
-instead of `~/Library/LaunchAgents/`.
-
-## Step 8 — Configure Dex SSO (after Dex Application is Healthy)
-
-This step wires up GitHub OAuth → Dex → ArgoCD single sign-on.
-Do it once. ArgoCD will continue to accept the local `admin` account in parallel.
-
-### 8a — Create a GitHub OAuth App
-
-Go to https://github.com/settings/developers → **OAuth Apps** → **New OAuth App**:
-
-| Field              | Value                          |
-|--------------------|--------------------------------|
-| Application name   | homelab-dex                    |
-| Homepage URL       | http://dex.homelab.local       |
-| Authorization callback URL | http://dex.homelab.local/callback |
-
-Copy the **Client ID** and generate a **Client Secret**.
-
-### 8b — Write Dex secrets to Vault
-
-```bash
-# GitHub OAuth creds (Client ID + Client Secret from step 8a)
-kubectl exec -n vault vault-0 -- \
-  env VAULT_TOKEN="<root-token>" \
-  vault kv put secret/homelab/platform/dex/github \
-    client_id="<GitHub-Client-ID>" \
-    client_secret="<GitHub-Client-Secret>"
-
-# ArgoCD OIDC shared secret — any random string works (e.g. openssl rand -hex 32)
-kubectl exec -n vault vault-0 -- \
-  env VAULT_TOKEN="<root-token>" \
-  vault kv put secret/homelab/platform/dex/argocd \
-    client_secret="<random-string>"
-```
-
-ESO syncs these into `dex-secrets` (namespace dex) and `argocd-dex-client`
-(namespace argocd) within ~60 s. Verify:
-```bash
-kubectl get externalsecret -n dex dex-secrets
-kubectl get externalsecret -n argocd argocd-dex-client
-# Status should be: SecretSynced
-```
-
-### 8c — Configure ArgoCD OIDC
-
-```bash
-just argocd-oidc-setup
-```
-
-This patches `argocd-cm` with the Dex issuer config and `argocd-rbac-cm` to grant
-your GitHub username (`openthisworld`) the `admin` role, then restarts ArgoCD server.
-
-### 8d — Verify SSO
-
-Open http://argocd.homelab.local → click **Log in via Dex** → GitHub OAuth flow →
-should land back in ArgoCD as admin.
-
-The local `admin` account still works via the **Login** form (useful as a fallback).
+`sudo brew services start` is required because port 53 is privileged (<1024).
 
 ## Teardown
 
 ```bash
-kind delete cluster --name homelab
+just kind-down
 ```
 
-Re-running steps 1–4 restores the full platform. Steps 2–4 take ~5 minutes.
-Re-run steps 5–8 after every full cluster rebuild (Vault PVC is lost on kind delete).
+Re-running Steps 1–9 fully restores the platform. Steps 1–6 take ~10 minutes.
+Steps 7–9 require re-seeding Vault (PVC is lost when kind cluster is deleted).

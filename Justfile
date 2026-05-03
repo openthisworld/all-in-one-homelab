@@ -5,8 +5,9 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 set dotenv-load := false
 
-cluster_name := env_var_or_default("KIND_CLUSTER_NAME", "homelab")
-argocd_ns    := "argocd"
+cluster_name  := env_var_or_default("KIND_CLUSTER_NAME", "homelab")
+argocd_ns     := "argocd"
+argocd_chart  := "7.7.14"
 
 # Default target — list available recipes.
 default:
@@ -45,9 +46,9 @@ kind-status:
 
 # --- ArgoCD helpers ---
 
-# Port-forward ArgoCD UI to https://localhost:8080
+# Port-forward ArgoCD UI to http://localhost:8080 (fallback if ingress is down).
 argocd-ui:
-    kubectl -n {{argocd_ns}} port-forward svc/argocd-server 8080:443
+    kubectl -n {{argocd_ns}} port-forward svc/argocd-server 8080:80
 
 # Print initial admin password.
 argocd-pwd:
@@ -59,23 +60,36 @@ argocd-pwd:
 argocd-root-apply:
     kubectl apply -f platform/gitops/root-app.yaml
 
-# Configure ArgoCD OIDC via Dex (run once after Dex is Healthy + secrets synced).
-# Prereq: ExternalSecret argocd-dex-client must be SecretSynced in namespace argocd.
-argocd-oidc-setup:
-    @echo "Patching argocd-cm with Dex OIDC config..."
-    kubectl patch configmap argocd-cm -n {{argocd_ns}} --type merge -p \
-        '{"data":{"url":"http://argocd.homelab.local","oidc.config":"name: Dex\nissuer: http://dex.homelab.local\nclientID: argocd\nclientSecret: $argocd-dex-client:clientSecret\nrequestedScopes:\n  - openid\n  - profile\n  - email\n  - groups\n"}}'
-    @echo "Patching argocd-rbac-cm — granting openthisworld admin role..."
-    kubectl patch configmap argocd-rbac-cm -n {{argocd_ns}} --type merge -p \
-        '{"data":{"policy.csv":"g, openthisworld, role:admin\n","policy.default":"role:readonly"}}'
-    @echo "Restarting argocd-server..."
-    kubectl rollout restart deployment argocd-server -n {{argocd_ns}}
-    kubectl rollout status deployment argocd-server -n {{argocd_ns}} --timeout=60s
-    @echo "Done. Open http://argocd.homelab.local and click 'Log in via Dex'."
+# Bootstrap ArgoCD via Helm (new cluster). See platform/platform-services/argocd/values.yaml.
+argocd-bootstrap:
+    helm repo add argo https://argoproj.github.io/argo-helm
+    helm repo update argo
+    helm install argocd argo/argo-cd \
+        --namespace {{argocd_ns}} \
+        --create-namespace \
+        --version {{argocd_chart}} \
+        --values platform/platform-services/argocd/values.yaml \
+        --wait
+
+# Upgrade ArgoCD after changing platform/platform-services/argocd/values.yaml.
+argocd-upgrade:
+    helm upgrade argocd argo/argo-cd \
+        --namespace {{argocd_ns}} \
+        --version {{argocd_chart}} \
+        --values platform/platform-services/argocd/values.yaml \
+        --wait
+
+# --- CoreDNS ---
+
+# Add *.homelab.local → ingress-nginx ClusterIP to CoreDNS.
+# Required for in-cluster OIDC (ArgoCD, Vault → Dex token validation).
+# Run once after ingress-nginx is Healthy. Re-run when adding new *.homelab.local services.
+coredns-patch:
+    bash scripts/coredns-homelab-patch.sh
 
 # --- Vault helpers ---
 
-vault_ns := "vault"
+vault_ns  := "vault"
 vault_pod := "vault-0"
 
 # Initialize Vault — run once after first ArgoCD sync. SAVE the output.
@@ -98,7 +112,16 @@ vault-status:
 vault-setup:
     bash scripts/vault-setup.sh {{vault_ns}} {{vault_pod}}
 
-# Write a secret to Vault KV (interactive). Usage: just vault-put path/to/key
+# Seed all platform secrets from .vault-secrets.env into Vault.
+# Run after vault-setup on every cluster rebuild. See .vault-secrets.env.example.
+vault-seed:
+    bash scripts/vault-seed.sh
+
+# Configure Vault OIDC auth via Dex (run after vault-seed + Dex is Healthy).
+vault-setup-oidc:
+    bash scripts/vault-setup-oidc.sh {{vault_ns}} {{vault_pod}}
+
+# Write a single secret to Vault KV (interactive). Usage: just vault-put path/to/key
 vault-put key:
     @echo "Enter value for secret/homelab/{{key}}:"
     @read -rs VAL; \
