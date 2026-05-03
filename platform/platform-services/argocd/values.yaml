@@ -1,0 +1,96 @@
+---
+# ArgoCD — argo/argo-cd Helm chart.
+# Chart version 7.7.14 → ArgoCD v2.13.3
+#
+# Bootstrap (new cluster — run once):
+#   helm repo add argo https://argoproj.github.io/argo-helm
+#   helm install argocd argo/argo-cd -n argocd --create-namespace \
+#     --version 7.7.14 \
+#     --values platform/platform-services/argocd/values.yaml \
+#     --wait
+#
+# Upgrade after changing this file:
+#   just argocd-upgrade
+
+configs:
+  params:
+    # Serve plain HTTP — nginx handles the TLS/redirect boundary at the Ingress.
+    server.insecure: "true"
+
+  cm:
+    url: "http://argocd.homelab.local"
+
+    # External Dex OIDC — GitHub OAuth upstream.
+    # clientSecret is resolved at runtime from the argocd-dex-client Secret
+    # in the argocd namespace (created by ESO from Vault).
+    oidc.config: |
+      name: Dex
+      issuer: http://dex.homelab.local
+      clientID: argocd
+      clientSecret: $argocd-dex-client:clientSecret
+      requestedScopes:
+        - openid
+        - profile
+        - email
+        - groups
+
+    # Prevent ArgoCD from pruning Cilium auto-generated identities.
+    resource.exclusions: |
+      - apiGroups:
+        - cilium.io
+        kinds:
+        - CiliumIdentity
+        clusters:
+        - "*"
+
+  rbac:
+    # GitHub username (via Dex) maps to ArgoCD admin.
+    policy.csv: |
+      g, openthisworld, role:admin
+    policy.default: "role:readonly"
+
+# Disable the built-in Dex sidecar — we run our own Dex in the dex namespace.
+dex:
+  enabled: false
+
+server:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hostname: argocd.homelab.local
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+applicationSet:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# Not used — saves ~64 MiB RSS.
+notifications:
+  enabled: false
