@@ -1,0 +1,56 @@
+---
+# Dex OAuth2 clients — stored as kubernetes CRD objects in the dex namespace.
+#
+# WHY CRDs INSTEAD OF staticClients IN values.yaml:
+#   Dex v2.41.1 does not expand $ENV_VAR references in the staticClients section
+#   of its config file. The connector section (GitHub) works fine, but staticClients
+#   stores the literal "$ARGOCD_CLIENT_SECRET" string as the secret → always fails.
+#   CRD objects are read directly from Dex's kubernetes storage backend — no config
+#   file parsing, no env var expansion needed.
+#
+# secretHash: bcrypt hash of the plaintext secret stored in Vault.
+#   Plaintext → Vault → ESO → k8s Secret (used by ArgoCD/Vault to authenticate).
+#   Hash     → this file → ArgoCD → kubernetes CRD (used by Dex to verify).
+#   The hash is one-way: safe to store in git even in a public repo.
+#
+# To rotate secrets:
+#   1. Generate new secret:  openssl rand -hex 32
+#   2. Seed to Vault:        just vault-put platform/dex/argocd   (or .../vault)
+#   3. Regenerate hash:      just dex-hash-secrets
+#   4. Update secretHash below, commit, push → ArgoCD syncs automatically.
+#
+# CRD schema (fields at root level, not under spec — Dex CRD design):
+#   id           — OIDC client_id sent by the relying party
+#   name         — human-readable label in Dex UI
+#   secretHash   — bcrypt hash of the client_secret
+#   redirectURIs — allowed OAuth2 callback URLs
+
+# ArgoCD — GitOps dashboard.
+# Plaintext at: secret/homelab/platform/dex/argocd → client_secret
+# ArgoCD reads the plaintext from k8s Secret argocd/argocd-dex-client
+# via $argocd-dex-client:clientSecret reference in argocd-cm.
+apiVersion: dex.coreos.com/v1
+kind: OAuth2Client
+metadata:
+  name: argocd
+  namespace: dex
+id: argocd
+name: ArgoCD
+secretHash: "$2b$10$exF7tvG58D2ohTOwXJQSd.8bKflv6S0mab8QJKiM/al475IcJ0N4q"
+redirectURIs:
+  - http://argocd.homelab.local/auth/callback
+
+---
+# Vault — secret manager UI.
+# Plaintext at: secret/homelab/platform/dex/vault → client_secret
+apiVersion: dex.coreos.com/v1
+kind: OAuth2Client
+metadata:
+  name: vault
+  namespace: dex
+id: vault
+name: Vault
+secretHash: "$2b$10$O5sspE7v9vFuh4cpLsR6LeWN09TN9UDri32t7UvjqEOxhZ.7pTBFy"
+redirectURIs:
+  - http://vault.homelab.local/ui/vault/auth/oidc/oidc/callback
+  - http://localhost:8250/oidc/callback

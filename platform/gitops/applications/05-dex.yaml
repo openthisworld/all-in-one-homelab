@@ -17,6 +17,7 @@ metadata:
 spec:
   project: default
   sources:
+    # Dex Helm chart.
     - repoURL: https://charts.dexidp.io
       chart: dex
       targetRevision: 0.19.1
@@ -24,9 +25,16 @@ spec:
         releaseName: dex
         valueFiles:
           - $values/platform/platform-services/dex/values.yaml
+    # Git ref for Helm valueFiles above — not applied as manifests.
     - repoURL: https://github.com/openthisworld/all-in-one-homelab.git
       targetRevision: main
       ref: values
+    # OAuth2 client CRD objects — applied directly to the dex namespace.
+    # Bypasses Dex config file parsing (where $VAR expansion does not work
+    # for staticClients). Dex reads these from its kubernetes storage backend.
+    - repoURL: https://github.com/openthisworld/all-in-one-homelab.git
+      targetRevision: main
+      path: platform/platform-services/dex/manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: dex

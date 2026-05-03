@@ -79,6 +79,25 @@ argocd-upgrade:
         --values platform/platform-services/argocd/values.yaml \
         --wait
 
+# --- Dex helpers ---
+
+# Generate bcrypt hashes for oauth2client CRD manifests after secret rotation.
+# Reads current plaintext secrets from the cluster (ESO-synced from Vault).
+# Usage: just dex-hash-secrets → copy output into dex/manifests/oauth2clients.yaml
+dex-hash-secrets:
+    @python3 -c "
+import bcrypt, subprocess, base64
+def get(ns, name, key):
+    raw = subprocess.check_output(['kubectl','get','secret','-n',ns,name,'-o',f'jsonpath={{.data.{key}}}'])
+    return base64.b64decode(raw).decode()
+argocd = get('dex','dex-secrets','ARGOCD_CLIENT_SECRET')
+vault  = get('dex','dex-secrets','VAULT_CLIENT_SECRET')
+print('ArgoCD secretHash:', bcrypt.hashpw(argocd.encode(), bcrypt.gensalt(10)).decode())
+print('Vault  secretHash:', bcrypt.hashpw(vault.encode(),  bcrypt.gensalt(10)).decode())
+print()
+print('Paste into platform/platform-services/dex/manifests/oauth2clients.yaml')
+"
+
 # --- CoreDNS ---
 
 # Add *.homelab.local → ingress-nginx ClusterIP to CoreDNS.

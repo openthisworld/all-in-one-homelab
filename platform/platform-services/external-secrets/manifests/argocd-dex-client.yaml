@@ -19,6 +19,13 @@ spec:
   target:
     name: argocd-dex-client
     creationPolicy: Owner
+    template:
+      metadata:
+        labels:
+          # Required for ArgoCD's settings informer to pick up this secret.
+          # Without this label ArgoCD silently ignores $argocd-dex-client:clientSecret
+          # and sends an empty string as the OIDC clientSecret → Dex: invalid_client.
+          app.kubernetes.io/part-of: argocd
   data:
     - secretKey: clientSecret
       remoteRef:
