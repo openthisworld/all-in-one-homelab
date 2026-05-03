@@ -34,11 +34,13 @@ kind: OAuth2Client
 metadata:
   name: argocd
   namespace: dex
-id: argocd
-name: ArgoCD
-secretHash: "$2b$10$exF7tvG58D2ohTOwXJQSd.8bKflv6S0mab8QJKiM/al475IcJ0N4q"
-redirectURIs:
-  - http://argocd.homelab.local/auth/callback
+spec:
+  id: argocd
+  name: "ArgoCD"
+  secretHash: "$2b$10$exF7tvG58D2ohTOwXJQSd.8bKflv6S0mab8QJKiM/al475IcJ0N4q"
+  redirectURIs:
+    - http://argocd.homelab.local/auth/callback
+    - https://argocd.homelab.local/auth/callback
 
 ---
 # Vault — secret manager UI.
@@ -48,9 +50,10 @@ kind: OAuth2Client
 metadata:
   name: vault
   namespace: dex
-id: vault
-name: Vault
-secretHash: "$2b$10$O5sspE7v9vFuh4cpLsR6LeWN09TN9UDri32t7UvjqEOxhZ.7pTBFy"
-redirectURIs:
-  - http://vault.homelab.local/ui/vault/auth/oidc/oidc/callback
-  - http://localhost:8250/oidc/callback
+spec:
+  id: vault
+  name: "Vault"
+  secretHash: "$2b$10$O5sspE7v9vFuh4cpLsR6LeWN09TN9UDri32t7UvjqEOxhZ.7pTBFy"
+  redirectURIs:
+    - http://vault.homelab.local/ui/vault/auth/oidc/oidc/callback
+    - http://localhost:8250/oidc/callback
