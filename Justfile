@@ -1,66 +1,49 @@
 # HomeLab task runner.
-# Run `just` (no args) to list targets.
-# Each target should be idempotent and safe to re-run.
-
 set shell := ["bash", "-euo", "pipefail", "-c"]
 set dotenv-load := false
 
 cluster_name  := env_var_or_default("KIND_CLUSTER_NAME", "homelab")
-argocd_ns     := "argocd"
-argocd_chart  := "7.7.14"
+argocd_ns      := "argocd"
+argocd_chart   := "7.7.14"
 
-# Default target — list available recipes.
 default:
     @just --list --unsorted
 
 # --- Setup ---
-
-# Install pinned toolchain via mise.
 install-tools:
     mise install
     pre-commit install
 
-# Run all pre-commit hooks across the repo.
 lint:
     pre-commit run --all-files
 
 # --- Cluster lifecycle ---
-
-# Full bootstrap: kind + Cilium + ArgoCD + root App-of-Apps. Interactive prompts.
 bootstrap:
     bash scripts/bootstrap.sh
 
-# Create kind cluster (no CNI).
 kind-up:
     kind create cluster --config platform/bootstrap/kind-cluster.yaml --name {{cluster_name}}
 
-# Delete kind cluster. Destructive — confirms first.
 kind-down:
     @read -r -p "Delete kind cluster '{{cluster_name}}'? [y/N] " ans && [[ "$ans" == "y" ]] || exit 1
     kind delete cluster --name {{cluster_name}}
 
-# Show kind cluster status.
 kind-status:
     kind get clusters
     kubectl --context kind-{{cluster_name}} get nodes -o wide
 
 # --- ArgoCD helpers ---
-
-# Port-forward ArgoCD UI to http://localhost:8080 (fallback if ingress is down).
 argocd-ui:
     kubectl -n {{argocd_ns}} port-forward svc/argocd-server 8080:80
 
-# Print initial admin password.
 argocd-pwd:
     kubectl -n {{argocd_ns}} get secret argocd-initial-admin-secret \
         -o jsonpath='{.data.password}' | base64 -d
     @echo
 
-# Apply (or update) the root App-of-Apps. Idempotent.
 argocd-root-apply:
     kubectl apply -f platform/gitops/root-app.yaml
 
-# Bootstrap ArgoCD via Helm (new cluster). See platform/platform-services/argocd/values.yaml.
 argocd-bootstrap:
     helm repo add argo https://argoproj.github.io/argo-helm
     helm repo update argo
@@ -71,7 +54,6 @@ argocd-bootstrap:
         --values platform/platform-services/argocd/values.yaml \
         --wait
 
-# Upgrade ArgoCD after changing platform/platform-services/argocd/values.yaml.
 argocd-upgrade:
     helm upgrade argocd argo/argo-cd \
         --namespace {{argocd_ns}} \
@@ -80,90 +62,94 @@ argocd-upgrade:
         --wait
 
 # --- Dex helpers ---
-
-# Generate bcrypt hashes for oauth2client CRD manifests after secret rotation.
-# Reads current plaintext secrets from the cluster (ESO-synced from Vault).
-# Usage: just dex-hash-secrets → copy output into dex/manifests/oauth2clients.yaml
-dex-hash-secrets:
-    @python3 -c "
-import bcrypt, subprocess, base64
-def get(ns, name, key):
-    raw = subprocess.check_output(['kubectl','get','secret','-n',ns,name,'-o',f'jsonpath={{.data.{key}}}'])
-    return base64.b64decode(raw).decode()
-argocd = get('dex','dex-secrets','ARGOCD_CLIENT_SECRET')
-vault  = get('dex','dex-secrets','VAULT_CLIENT_SECRET')
-print('ArgoCD secretHash:', bcrypt.hashpw(argocd.encode(), bcrypt.gensalt(10)).decode())
-print('Vault  secretHash:', bcrypt.hashpw(vault.encode(),  bcrypt.gensalt(10)).decode())
-print()
-print('Paste into platform/platform-services/dex/manifests/oauth2clients.yaml')
-"
+# dex-hash-secrets:
+#     @python3 << 'EOF'
+# import bcrypt, subprocess, base64
+# def get(ns, name, key):
+#     # Just ignores everything inside this 'EOF' block
+#     raw = subprocess.check_output(['kubectl','get','secret','-n',ns,name,'-o',f'jsonpath={{{{.data.{key}}}}}}'])
+#     return base64.b64decode(raw).decode()
+#
+# try:
+#     argocd = get('dex','dex-secrets','ARGOCD_CLIENT_SECRET')
+#     vault  = get('dex','dex-secrets','VAULT_CLIENT_SECRET')
+#     print(f"ArgoCD secretHash: {bcrypt.hashpw(argocd.encode(), bcrypt.gensalt(10)).decode()}")
+#     print(f"Vault  secretHash: {bcrypt.hashpw(vault.encode(),  bcrypt.gensalt(10)).decode()}")
+#     print("\nPaste into platform/platform-services/dex/manifests/oauth2clients.yaml")
+# except Exception as e:
+#     print(f"Error: {e}")
+# EOF
 
 # --- CoreDNS ---
-
-# Add *.homelab.local → ingress-nginx ClusterIP to CoreDNS.
-# Required for in-cluster OIDC (ArgoCD, Vault → Dex token validation).
-# Run once after ingress-nginx is Healthy. Re-run when adding new *.homelab.local services.
 coredns-patch:
     bash scripts/coredns-homelab-patch.sh
 
 # --- Vault helpers ---
-
 vault_ns  := "vault"
 vault_pod := "vault-0"
 
-# Initialize Vault — run once after first ArgoCD sync. SAVE the output.
 vault-init:
     kubectl exec -n {{vault_ns}} {{vault_pod}} -- \
         vault operator init -key-shares=3 -key-threshold=2
 
-# Unseal Vault — run after every pod restart. Prompts for keys inside the container.
 vault-unseal:
     @echo "=== Unseal key 1 of 2 ==="
     kubectl exec -it -n {{vault_ns}} {{vault_pod}} -- vault operator unseal
     @echo "=== Unseal key 2 of 2 ==="
     kubectl exec -it -n {{vault_ns}} {{vault_pod}} -- vault operator unseal
 
-# Show Vault seal/init status.
 vault-status:
     kubectl exec -n {{vault_ns}} {{vault_pod}} -- vault status 2>&1 || true
 
-# Configure Vault for ESO: KV v2 + kubernetes auth + policy (run once after init).
 vault-setup:
     bash scripts/vault-setup.sh {{vault_ns}} {{vault_pod}}
 
-# Seed all platform secrets from .vault-secrets.env into Vault.
-# Run after vault-setup on every cluster rebuild. See .vault-secrets.env.example.
 vault-seed:
     bash scripts/vault-seed.sh
 
-# Configure Vault OIDC auth via Dex (run after vault-seed + Dex is Healthy).
 vault-setup-oidc:
     bash scripts/vault-setup-oidc.sh {{vault_ns}} {{vault_pod}}
 
-# Write a single secret to Vault KV (interactive). Usage: just vault-put path/to/key
 vault-put key:
     @echo "Enter value for secret/homelab/{{key}}:"
     @read -rs VAL; \
     kubectl exec -n {{vault_ns}} {{vault_pod}} -- \
         vault kv put "secret/homelab/{{key}}" value="$$VAL"
 
-# Read a secret from Vault KV. Usage: just vault-get path/to/key
-vault-get key:
-    kubectl exec -n {{vault_ns}} {{vault_pod}} -- \
-        vault kv get "secret/homelab/{{key}}"
-
-# --- Observability helpers ---
-
-# Port-forward Grafana to http://localhost:3000
-grafana-ui:
-    kubectl -n observability port-forward svc/grafana 3000:80
-
 # --- Misc ---
-
-# Show memory pressure on Mac + cluster nodes.
 mem:
     @echo "--- macOS ---"
     @vm_stat | head -20
-    @echo
+    @echo ""
     @echo "--- Cluster nodes ---"
     @kubectl top nodes 2>/dev/null || echo "metrics-server not yet installed"
+
+# --- Cilium ---
+cilium_version := "1.16.5"
+
+cilium-install:
+    helm repo add cilium https://helm.cilium.io
+    helm repo update cilium
+    helm install cilium cilium/cilium \
+        --version {{cilium_version}} \
+        --namespace kube-system \
+        --values platform/platform-services/cilium/values.yaml \
+        --wait
+    kubectl wait --for=condition=Ready nodes --all --timeout=300s
+
+cilium-uninstall:
+    helm uninstall cilium -n kube-system
+
+# --- Debug & Testing ---
+# Перевірка резолвінгу доменів всередині кластера
+dns-test:
+    kubectl run -it --rm dns-test --image=busybox --restart=Never -- \
+        nslookup dex.homelab.local
+
+# Слідкувати за станом ArgoCD застосунків
+watch-apps:
+    kubectl get applications -n {{argocd_ns}} --watch
+
+# Перегляд логів Cilium (корисно при дебазі лаби)
+cilium-logs:
+    kubectl logs -n kube-system -l k8s-app=cilium
