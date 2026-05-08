@@ -14,9 +14,15 @@ as the starting point.
 
 ### Added
 
+- **README mission section** — repo-level statement of what the platform is for (full local cycle: code → build → deploy via GitOps → test → metrics in Grafana via Dex SSO) and what it explicitly is not. Replaces the older terse "Goals" section.
+- **`projects/pocsmith/DESIGN.md`** — full design archive for the paused agentic PoC factory: architecture, role table, hard caps, output contract, intended CLI, file-layout end state, trade-offs vs Claude Code + claude-skills, and a step-by-step resume checklist if development restarts.
 - **pocsmith Role base class** (`projects/pocsmith/src/pocsmith/roles/`) with strict YAML-frontmatter parsing (pydantic `RoleFrontmatter`, `RoleScope`, `RoleCaps`). Filename-stem must equal `frontmatter.name` — silent divergence raises at load time.
 - **First mined role: PM** at `projects/pocsmith/roles/pm.md`, derived from `jeffallan/claude-skills` `skills/feature-forge/SKILL.md` (MIT) at upstream `5e8b6b8`. Adapted for agent-to-agent invocation (no `AskUserQuestions`), produces a typed `TaskList` for downstream Architect/Backend/QA roles. `Modified from upstream:` header on the file; full attribution in `projects/pocsmith/ATTRIBUTIONS.md`.
 - **PyYAML** declared as an explicit pocsmith dep (rather than relying on transitive yaml from `langgraph`/`sqlmodel`).
+
+### Changed
+
+- **`projects/pocsmith/` is paused, not in active development.** README status updated to point at `DESIGN.md`. Scaffold remains in main as a design archive; not maintained on a regular cadence.
 
 ## [0.0.1] — 2026-05-08
 
