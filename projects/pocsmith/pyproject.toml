@@ -29,6 +29,9 @@ dependencies = [
     "rich>=13.7.0",
     # Run-state persistence (SQLite-backed) for resumable runs.
     "sqlmodel>=0.0.22",
+    # Role markdown frontmatter parsing — explicit dep so we don't rely on
+    # transitive yaml from langgraph/sqlmodel.
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +40,8 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.6.0",
     "mypy>=1.10",
+    # Type stubs for explicitly-declared deps that ship without inline types.
+    "types-PyYAML",
 ]
 
 [project.scripts]
