@@ -1,0 +1,12 @@
+# pocsmith — Python project, ADR-0010.
+#
+# Tool versions are pinned exact and intentionally narrower than the repo root
+# (.mise.toml at the top of HomeLab). When this project is extracted to its
+# own repo (per ADR-0002), this file moves with it as-is.
+
+[tools]
+python = "3.13.2"
+uv     = "0.5.18"
+
+[env]
+# uv reads pyproject.toml; nothing project-specific needed here yet.
