@@ -15,9 +15,16 @@ first.
 
 ## Status
 
-**v0 — Planning.** This README and the scaffold are in place. Roles, the
-LangGraph state machine, and the CLI are not yet implemented. Tracking in
-the ADR's "Open questions" section.
+**Paused.** Active development is on hold; the project remains in main as
+a design archive. See [DESIGN.md](DESIGN.md) for the full intended
+architecture, the rationale for pausing (Claude Code + `claude-skills`
+plugin already covers most of the value), and a resume checklist.
+
+The scaffold (`pyproject.toml`, role-loading machinery in `src/pocsmith/`,
+`roles/pm.md` mined from upstream) is committed but not maintained on a
+regular cadence. If `uv lock --upgrade` ever breaks against it, that is
+the trigger to either rebuild from the resume checklist or retire the
+project entirely.
 
 ## Layout
 
