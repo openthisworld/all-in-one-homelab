@@ -12,7 +12,11 @@ as the starting point.
 
 ## [Unreleased]
 
-_Nothing yet — list upcoming changes here as they merge to main._
+### Added
+
+- **pocsmith Role base class** (`projects/pocsmith/src/pocsmith/roles/`) with strict YAML-frontmatter parsing (pydantic `RoleFrontmatter`, `RoleScope`, `RoleCaps`). Filename-stem must equal `frontmatter.name` — silent divergence raises at load time.
+- **First mined role: PM** at `projects/pocsmith/roles/pm.md`, derived from `jeffallan/claude-skills` `skills/feature-forge/SKILL.md` (MIT) at upstream `5e8b6b8`. Adapted for agent-to-agent invocation (no `AskUserQuestions`), produces a typed `TaskList` for downstream Architect/Backend/QA roles. `Modified from upstream:` header on the file; full attribution in `projects/pocsmith/ATTRIBUTIONS.md`.
+- **PyYAML** declared as an explicit pocsmith dep (rather than relying on transitive yaml from `langgraph`/`sqlmodel`).
 
 ## [0.0.1] — 2026-05-08
 

@@ -14,12 +14,13 @@ work. This file lists each upstream source, the licence, and what was taken.
 
 ### Specific files derived (kept in sync as roles are added)
 
-_None yet — this section is populated as `roles/*.md` files are mined. Each
-entry pairs a local file with its upstream source._
+Each entry pairs a local file with its upstream source. Modifications are
+summarised here; full per-file detail lives in the `Modified from upstream:`
+header at the top of each derived file.
 
-| Local file | Upstream source (SHA + path) | Modifications |
-| ---------- | ---------------------------- | ------------- |
-| _(pending)_ | _(pending)_ | _(pending)_ |
+| Local file | Upstream (SHA + path) | Modifications |
+| ---------- | --------------------- | ------------- |
+| `roles/pm.md` | `5e8b6b8` `skills/feature-forge/SKILL.md` | Removed `AskUserQuestions` tool guidance (PM is invoked agent-to-agent, not interactively); removed PM-Hat/Dev-Hat split (Architect and QA cover those); tightened output to a typed `TaskList` schema; inlined EARS + acceptance-criteria conventions (replaces upstream `references/`). |
 
 ### Mining procedure
 
