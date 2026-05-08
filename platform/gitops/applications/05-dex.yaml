@@ -1,10 +1,10 @@
 ---
 # Dex — OIDC identity provider with GitHub OAuth upstream.
-# See docs/adr/0007-sso-dex-github-oauth.md
+# See docs/adr/0007-sso-dex-github-oauth.md and docs/adr/0009-dex-static-clients-via-secretenv.md
 #
 # Depends on:
 #   - ExternalSecret dex-secrets in namespace dex (synced by cluster-secret-store app)
-#   - Vault secrets: secret/homelab/platform/dex/github and .../dex/argocd
+#   - Vault secrets: secret/homelab/platform/dex/{github,argocd,vault}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -17,7 +17,8 @@ metadata:
 spec:
   project: default
   sources:
-    # Dex Helm chart.
+    # Dex Helm chart. Static OAuth2 clients live in values.yaml (secretEnv field
+    # reads plaintext secrets from the dex-secrets envFrom mount).
     - repoURL: https://charts.dexidp.io
       chart: dex
       targetRevision: 0.19.1
@@ -29,12 +30,6 @@ spec:
     - repoURL: https://github.com/openthisworld/all-in-one-homelab.git
       targetRevision: main
       ref: values
-    # OAuth2 client CRD objects — applied directly to the dex namespace.
-    # Bypasses Dex config file parsing (where $VAR expansion does not work
-    # for staticClients). Dex reads these from its kubernetes storage backend.
-    - repoURL: https://github.com/openthisworld/all-in-one-homelab.git
-      targetRevision: main
-      path: platform/platform-services/dex/manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: dex

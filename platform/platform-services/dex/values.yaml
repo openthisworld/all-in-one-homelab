@@ -3,18 +3,26 @@
 #
 # Secrets are injected via envFrom (ExternalSecret dex-secrets):
 #   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET → GitHub OAuth App
+#   ARGOCD_CLIENT_SECRET                   → ArgoCD OIDC client_secret (plaintext)
+#   VAULT_CLIENT_SECRET                    → Vault OIDC client_secret (plaintext)
 #
-# OIDC clients (ArgoCD, Vault) are managed as oauth2clients.dex.coreos.com CRD
-# objects in platform/platform-services/dex/manifests/ — not as staticClients here.
-# Reason: Dex v2.41.1 does not expand $VAR env vars in the staticClients config
-# section. CRD objects bypass the config entirely and are read directly from
-# Dex's kubernetes storage backend.
+# Static clients (ArgoCD, Vault) use Dex's `secretEnv` field — Dex resolves
+# the env var at startup. Plaintext lives only in Vault and the in-cluster
+# Secret synced by ESO; nothing sensitive is committed to git.
+#
+# Why not OAuth2Client CRDs:
+#   The CRD storage backend uses a flat schema (id/secret/redirectURIs at
+#   resource root) and stores plaintext secrets — meaning either the secret
+#   leaks into git or a separate sync mechanism is needed. `secretEnv` keeps
+#   the wiring in one file with no extra moving parts. See ADR-0009.
 
 config:
   issuer: http://dex.homelab.local
 
   storage:
-    # Kubernetes CRD storage — no external DB needed. Dex manages its own CRDs.
+    # Kubernetes CRD storage — Dex manages its own state CRDs (auth requests,
+    # offline sessions, refresh tokens). Static clients live in this config,
+    # not in storage.
     type: kubernetes
     config:
       inCluster: true
@@ -27,12 +35,28 @@ config:
       id: github
       name: GitHub
       config:
-        # Injected from dex-secrets ExternalSecret via env vars.
-        # Dex DOES expand $VAR in the connectors section.
+        # $VAR expansion works in connector config (Dex feature, not generic).
         clientID: $GITHUB_CLIENT_ID
         clientSecret: $GITHUB_CLIENT_SECRET
         redirectURI: http://dex.homelab.local/callback
         orgs: []
+
+  staticClients:
+    - id: argocd
+      name: ArgoCD
+      # Dex reads the literal env var named here at startup. Not $VAR
+      # interpolation — a dedicated field that bypasses YAML parsing.
+      secretEnv: ARGOCD_CLIENT_SECRET
+      redirectURIs:
+        - http://argocd.homelab.local/auth/callback
+        - https://argocd.homelab.local/auth/callback
+
+    - id: vault
+      name: Vault
+      secretEnv: VAULT_CLIENT_SECRET
+      redirectURIs:
+        - http://vault.homelab.local/ui/vault/auth/oidc/oidc/callback
+        - http://localhost:8250/oidc/callback
 
   oauth2:
     skipApprovalScreen: true
@@ -52,10 +76,9 @@ resources:
   limits:
     memory: 128Mi
 
-# Dex needs to create/manage its own CRDs for storage.
+# Dex needs to manage its own state CRDs (auth requests, refresh tokens, etc).
 serviceAccount:
   create: true
 
-# RBAC to allow Dex to manage its storage CRDs.
 rbac:
   create: true
