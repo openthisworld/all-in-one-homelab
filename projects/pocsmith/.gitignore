@@ -1,0 +1,20 @@
+# pocsmith local state — never committed.
+
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Run state: prompts, outputs, costs, postmortems. One SQLite file per run.
+.state/
+
+# uv installs into .venv; lockfile IS committed.
+# (uv.lock is intentionally NOT in this gitignore.)
+
+# Environment and secrets — pocsmith reads ANTHROPIC_API_KEY from a local env
+# file when running standalone; it must never be committed.
+.env
+.env.local

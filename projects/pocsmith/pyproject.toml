@@ -1,0 +1,86 @@
+[project]
+name = "pocsmith"
+version = "0.0.0"
+description = "Agentic PoC factory: a CEO-led role loop that produces deployable proofs-of-concept for the HomeLab cluster."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [{ name = "openthisworld" }]
+keywords = ["agents", "claude", "langgraph", "homelab", "poc"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
+]
+
+# Runtime dependencies. Exact versions are resolved into uv.lock by `uv lock`.
+# Loose constraints here so weekly minor bumps come in via `uv lock --upgrade`
+# without touching pyproject.toml. Major bumps are deliberate.
+dependencies = [
+    # Per-role reasoning + tool use.
+    "claude-agent-sdk>=0.1.0",
+    # Outer-loop orchestration: CEO state machine, persistence, retries.
+    "langgraph>=0.2.0",
+    # Typed config and structured outputs from role calls.
+    "pydantic>=2.7.0",
+    # CLI surface (`pocsmith run "<prompt>"`).
+    "typer>=0.12.0",
+    # Pretty terminal output for CEO transcripts and run summaries.
+    "rich>=13.7.0",
+    # Run-state persistence (SQLite-backed) for resumable runs.
+    "sqlmodel>=0.0.22",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6.0",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+pocsmith = "pocsmith.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pocsmith"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",  # pycodestyle + pyflakes
+    "I",            # isort
+    "B",            # bugbear
+    "UP",           # pyupgrade
+    "N",            # pep8-naming
+    "S",            # bandit (security)
+    "A",            # builtins shadowing
+    "C4",           # comprehensions
+    "PT",           # pytest
+    "RET",          # return
+    "SIM",          # simplify
+]
+ignore = [
+    "S101",  # asserts are fine in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra -q"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src/pocsmith"]
