@@ -61,25 +61,6 @@ argocd-upgrade:
         --values platform/platform-services/argocd/values.yaml \
         --wait
 
-# --- Dex helpers ---
-# dex-hash-secrets:
-#     @python3 << 'EOF'
-# import bcrypt, subprocess, base64
-# def get(ns, name, key):
-#     # Just ignores everything inside this 'EOF' block
-#     raw = subprocess.check_output(['kubectl','get','secret','-n',ns,name,'-o',f'jsonpath={{{{.data.{key}}}}}}'])
-#     return base64.b64decode(raw).decode()
-#
-# try:
-#     argocd = get('dex','dex-secrets','ARGOCD_CLIENT_SECRET')
-#     vault  = get('dex','dex-secrets','VAULT_CLIENT_SECRET')
-#     print(f"ArgoCD secretHash: {bcrypt.hashpw(argocd.encode(), bcrypt.gensalt(10)).decode()}")
-#     print(f"Vault  secretHash: {bcrypt.hashpw(vault.encode(),  bcrypt.gensalt(10)).decode()}")
-#     print("\nPaste into platform/platform-services/dex/manifests/oauth2clients.yaml")
-# except Exception as e:
-#     print(f"Error: {e}")
-# EOF
-
 # --- CoreDNS ---
 coredns-patch:
     bash scripts/coredns-homelab-patch.sh
